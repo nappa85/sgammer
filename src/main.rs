@@ -46,23 +46,28 @@ fn main() -> Result<(), ()> {
         for r in res {
             let mut row = r.map_err(|e| error!("MySQL row error: {}", e))?;
 
+            let name = row.take("name").ok_or_else(|| error!("MySQL city.name encoding error"))?;
             let coords: String = row.take("coordinates").ok_or_else(|| error!("MySQL city.coordinates encoding error"))?;
             let mut poly: Vec<[f64; 2]> = Vec::new();
             for (i, c) in coords.replace("(", "").replace(")", "").split(",").enumerate() {
-                let f: f64 = c.trim().parse().map_err(|e| error!("Coordinate parse error \"{}\": {}", c, e))?;
-                if i % 2 == 0 {
-                    poly.push([f, 0_f64]);
-                }
-                else {
-                    let len = poly.len();
-                    poly[len - 1][1] = f;
+                match c.trim().parse() {
+                    Ok(f) => {
+                        if i % 2 == 0 {
+                            poly.push([f, 0_f64]);
+                        }
+                        else {
+                            let len = poly.len();
+                            poly[len - 1][1] = f;
+                        }
+                    },
+                    Err(e) => error!("Coordinate parse error for city {} \"{}\": {}", name, c, e),
                 }
             }
 
             let id = row.take("id").ok_or_else(|| error!("MySQL city.id encoding error"))?;
             temp.insert(id, City {
                 id,
-                name: row.take("name").ok_or_else(|| error!("MySQL city.name encoding error"))?,
+                name,
                 coords: Polygon::new(poly.into(), vec![]),
             });
         }
